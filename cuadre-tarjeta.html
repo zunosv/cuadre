@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cuadre de tarjeta</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#14181f;--mu:#5d6676;--bd:#dfe3ea;--ac:#0b6bcb;--ok:#0f8a4f;--wr:#c2410c;--okbg:#e6f6ee;--wrbg:#fdeee4;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12151a;--card:#1b2028;--tx:#e8ebf0;--mu:#9aa4b5;--bd:#2c3340;--ac:#5aa8ff;--ok:#4ade80;--wr:#fb923c;--okbg:#12301f;--wrbg:#38200f;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12151a;--card:#1b2028;--tx:#e8ebf0;--mu:#9aa4b5;--bd:#2c3340;--ac:#5aa8ff;--ok:#4ade80;--wr:#fb923c;--okbg:#12301f;--wrbg:#38200f;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:1.35rem;margin:4px 0 2px}
+p.s{color:var(--mu);margin:0 0 14px;font-size:.92rem}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:.82rem;color:var(--mu);margin:8px 0 4px}
+textarea,input,select{width:100%;padding:10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+textarea{min-height:110px;font:13px/1.3 ui-monospace,Menlo,monospace}
+button{padding:11px 16px;border:0;border-radius:8px;background:var(--ac);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+button.g{background:transparent;color:var(--ac);border:1px solid var(--bd)}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.k{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.k div{background:var(--bg);border-radius:8px;padding:8px;text-align:center}
+.k b{display:block;font-size:1.05rem}.k span{font-size:.75rem;color:var(--mu)}
+.msg{padding:10px 12px;border-radius:8px;margin:8px 0;font-size:.95rem}
+.ok{background:var(--okbg);color:var(--ok)}.wr{background:var(--wrbg);color:var(--wr)}
+.w{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{padding:8px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
+td.n,th.n{text-align:right}
+.t{font-weight:600}.t.e{color:var(--wr)}.t.t2{color:var(--ac)}
+.hide{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>Cuadre de tarjeta</h1>
+<p class="s">Te dice qué documentos pasar de tarjeta a efectivo (o al revés) para que la tarjeta quede exacta.</p>
+
+<div class="c">
+<label>1. Sube los dos PDF de ventas</label>
+<div class="row"><input type="file" id="p1" accept=".pdf"><select id="t1"><option value="A">PDF 1: detectar automático</option><option value="T">PDF 1 es de tarjeta</option><option value="E">PDF 1 es de efectivo</option></select></div>
+<div class="row" style="margin-top:8px"><input type="file" id="p2" accept=".pdf"><select id="t2"><option value="A">PDF 2: detectar automático</option><option value="E">PDF 2 es de efectivo</option><option value="T">PDF 2 es de tarjeta</option></select></div>
+<label>Mínimo de dígitos del número único</label><input id="dg" value="6" inputmode="numeric">
+<label>Cuál número de la línea es el único</label><select id="ix"><option value="0">El 1.º (561500, preimpreso)</option><option value="1" selected>El 2.º (550057, No documento)</option></select>
+<div class="bar"><button id="lp">Leer PDFs</button></div>
+<div id="pv"></div>
+</div>
+
+<div class="c">
+<label>Alternativa: pega los datos desde Excel (con encabezados) o sube un archivo</label>
+<textarea id="raw" placeholder="Número único&#9;Monto&#9;Forma de pago&#10;12345&#9;25.50&#9;Tarjeta&#10;12346&#9;10.00&#9;Efectivo"></textarea>
+<div class="bar"><input type="file" id="file" accept=".xlsx,.xls,.csv,.txt" style="flex:1;min-width:200px"><button id="load">Cargar</button></div>
+</div>
+
+<div class="c hide" id="cfg">
+<label>2. Columnas</label>
+<div class="row">
+<div><label>Número único</label><select id="cU"></select></div>
+<div><label>Monto</label><select id="cM"></select></div>
+<div><label>Forma de pago</label><select id="cP"></select></div>
+</div>
+<label>Total real de tarjeta (voucher / POS)</label>
+<input id="real" inputmode="decimal" placeholder="Ej: 1520.75">
+<div class="bar"><button id="go">Calcular cambios</button></div>
+</div>
+
+<div class="c hide" id="out"></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let rows=[];
+const money=c=>(c<0?"-":"")+"$"+(Math.abs(c)/100).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+function num(v){let s=String(v??"").replace(/[^0-9.,-]/g,"");if(!s)return NaN;
+if(s.includes(",")&&s.includes("."))s=s.replace(/,/g,"");
+else if(s.includes(",")&&/,\d{1,2}$/.test(s))s=s.replace(",",".");else s=s.replace(/,/g,"");
+return parseFloat(s)}
+function parseText(t){const L=t.split(/\r?\n/).filter(l=>l.trim());if(!L.length)return[];
+const d=L[0].includes("\t")?"\t":L[0].includes(";")?";":",";
+return L.map(l=>l.split(d).map(x=>x.trim().replace(/^"|"$/g,"")))}
+function setRows(r){rows=r.filter(x=>x.some(c=>String(c??"").trim()!==""));
+if(rows.length<2){alert("No encontré datos. Incluye encabezados y al menos una fila.");return}
+const h=rows[0].map(x=>String(x??""));
+const opts=h.map((x,i)=>`<option value="${i}">${x||"Col "+(i+1)}</option>`).join("");
+["cU","cM","cP"].forEach(id=>$(id).innerHTML=opts);
+const f=(re,def)=>{const i=h.findIndex(x=>re.test(x));return i>=0?i:def};
+$("cU").value=f(/[uú]nic|folio|ticket|n[uú]m|doc/i,0);
+$("cM").value=f(/monto|total|valor|importe/i,Math.min(1,h.length-1));
+$("cP").value=f(/pago|forma|tipo|m[eé]todo|efectivo|tarjeta/i,Math.min(2,h.length-1));
+$("cfg").classList.remove("hide");$("out").classList.add("hide")}
+$("load").onclick=()=>{
+const fl=$("file").files[0];
+if(fl){const rd=new FileReader();
+if(/\.(xlsx|xls)$/i.test(fl.name)){rd.onload=e=>{const wb=XLSX.read(e.target.result,{type:"array"});
+setRows(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:false,defval:""}))};rd.readAsArrayBuffer(fl)}
+else{rd.onload=e=>setRows(parseText(e.target.result));rd.readAsText(fl)}
+}else setRows(parseText($("raw").value))};
+
+const RA=/-?\$?\s?\d{1,3}(?:,\d{3})+\.\d{2}|-?\$?\s?\d+\.\d{2}/g;
+async function pdfLines(file){
+pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;const out=[];
+for(let p=1;p<=pdf.numPages;p++){const tc=await(await pdf.getPage(p)).getTextContent();
+const its=tc.items.filter(i=>i.str.trim()).map(i=>({s:i.str,x:i.transform[4],y:i.transform[5]})).sort((a,b)=>b.y-a.y||a.x-b.x);
+let cur=[],ly=null;const flush=()=>{if(cur.length)out.push(cur.sort((a,b)=>a.x-b.x).map(i=>i.s).join(" ").replace(/\s+/g," ").trim());cur=[]};
+for(const i of its){if(ly!==null&&Math.abs(i.y-ly)>3)flush();if(!cur.length)ly=i.y;cur.push(i)}flush()}
+return out}
+function parseLines(lines,mode,dg){const ok=[],bad=[];const re=new RegExp("\\b\\d{"+dg+",}\\b");
+for(const l of lines){if(/total/i.test(l))continue;const am=l.match(RA);if(!am)continue;
+const m=num(am[am.length-1]);
+const rest=l.replace(RA," ").replace(/\d{1,4}[\/-]\d{1,2}[\/-]\d{1,4}/g," ");
+const mm=rest.match(new RegExp(re.source,"g"))||[];const u=mm[Math.min(+$("ix").value,mm.length-1)];
+let t=mode;if(mode==="A")t=(s=>/tarj|\btar[cd]?\b|card|cr[eé]d|d[eé]b/i.test(s)?"T":/efec|\bef[ec]?\b|cash/i.test(s)?"E":null)(am.length>1?l.slice(l.indexOf(am[0])+am[0].length,l.lastIndexOf(am[am.length-1])):l);
+if(u&&!isNaN(m)&&t)ok.push({u,m,t});else bad.push(l)}
+return{ok,bad}}
+$("lp").onclick=async()=>{
+const dg=Math.max(1,parseInt($("dg").value)||6);const all=[];let h="";
+for(const n of[1,2]){const f=$("p"+n).files[0];if(!f)continue;
+try{const L=await pdfLines(f);const r=parseLines(L,$("t"+n).value,dg);
+const s=r.ok.reduce((a,d)=>a+Math.round(d.m*100),0);
+h+=`<div class="msg ${r.ok.length?"ok":"wr"}">PDF ${n}: ${r.ok.length} documentos (${r.ok.filter(d=>d.t==="T").length} tarjeta, ${r.ok.filter(d=>d.t==="E").length} efectivo), suma ${money(s)} (${L.length} líneas leídas)</div>`;
+if(!L.length)h+=`<div class="msg wr">PDF ${n} no tiene texto seleccionable (parece escaneado). Necesito otra versión del archivo.</div>`;
+if(r.bad.length)h+=`<details><summary>Líneas que no pude clasificar (${r.bad.length})</summary><pre style="overflow-x:auto;font-size:12px">${r.bad.slice(0,20).join("\n").replace(/</g,"&lt;")}</pre></details>`;
+r.ok.forEach(d=>all.push([d.u,d.m.toFixed(2),d.t==="T"?"Tarjeta":"Efectivo"]))}
+catch(e){h+=`<div class="msg wr">No pude leer el PDF ${n}: ${String(e.message||e)}</div>`}}
+$("pv").innerHTML=h||`<div class="msg wr">Selecciona al menos un PDF.</div>`;
+if(all.length)setRows([["Número único","Monto","Forma de pago"],...all])};
+function solve(amts,target){
+const dp=new Int32Array(target+1).fill(-1);dp[0]=-2;
+for(let i=0;i<amts.length;i++){const a=amts[i];if(a<=0||a>target)continue;
+for(let s=target;s>=a;s--){if(dp[s]===-1&&dp[s-a]!==-1)dp[s]=i}}
+let best=target;while(best>0&&dp[best]===-1)best--;
+const pick=[];let s=best;while(s>0){const i=dp[s];pick.push(i);s-=amts[i]}
+return{sum:best,pick}}
+
+$("go").onclick=()=>{
+const iu=+$("cU").value,im=+$("cM").value,ip=+$("cP").value;
+const real=Math.round(num($("real").value)*100);
+if(isNaN(real)){alert("Escribe el total real de tarjeta.");return}
+const docs=[];let skipped=0;
+for(const r of rows.slice(1)){const m=num(r[im]);const p=String(r[ip]??"").toLowerCase();
+const tipo=/tarj|card|pos|cr[eé]d|d[eé]b/.test(p)?"T":/efec|cash/.test(p)?"E":null;
+if(isNaN(m)||!tipo){skipped++;continue}
+docs.push({u:r[iu],c:Math.round(m*100),t:tipo})}
+const sys=docs.filter(d=>d.t==="T").reduce((a,d)=>a+d.c,0);
+const diff=sys-real;
+let h=`<div class="k"><div><b>${money(sys)}</b><span>Tarjeta en sistema</span></div><div><b>${money(real)}</b><span>Tarjeta real</span></div><div><b>${money(diff)}</b><span>Diferencia</span></div></div>`;
+if(skipped)h+=`<div class="msg wr">${skipped} fila(s) ignoradas (monto o forma de pago no reconocidos).</div>`;
+if(diff===0){h+=`<div class="msg ok">La tarjeta ya está cuadrada. No hay que cambiar nada.</div>`;show(h);return}
+const toCash=diff>0,target=Math.abs(diff);
+if(target>6000000){h+=`<div class="msg wr">La diferencia es demasiado grande para calcular en el navegador.</div>`;show(h);return}
+const pool=docs.filter(d=>d.t===(toCash?"T":"E"));
+h+=`<p style="margin:6px 0">${toCash?"Sobra tarjeta en el sistema: hay que pasar documentos <b>de tarjeta a efectivo</b>":"Falta tarjeta en el sistema: hay que pasar documentos <b>de efectivo a tarjeta</b>"} por ${money(target)}.</p>`;
+const r=solve(pool.map(d=>d.c),target);
+const sel=r.pick.map(i=>pool[i]);
+if(r.sum!==target){
+h+=`<div class="msg wr">No existe una combinación exacta. Lo más cercano es ${money(r.sum)} (faltan ${money(target-r.sum)}). Revisa si hay un documento faltante o con monto mal digitado.</div>`}
+else h+=`<div class="msg ok">Combinación exacta encontrada con ${sel.length} documento(s).</div>`;
+if(sel.length){
+h+=`<div class="w"><table><thead><tr><th>Número único</th><th class="n">Monto</th><th>Acción</th></tr></thead><tbody>`+
+sel.map(d=>`<tr><td>${String(d.u).replace(/</g,"&lt;")}</td><td class="n">${money(d.c)}</td><td class="t ${toCash?"e":"t2"}">${toCash?"Tarjeta → Efectivo":"Efectivo → Tarjeta"}</td></tr>`).join("")+
+`<tr><td class="t">Total</td><td class="n t">${money(r.sum)}</td><td></td></tr></tbody></table></div>
+<div class="bar"><button class="g" id="cp">Copiar números únicos</button></div>`}
+show(h);
+const b=$("cp");if(b)b.onclick=()=>{navigator.clipboard.writeText(sel.map(d=>d.u).join("\n")).then(()=>b.textContent="Copiado ✓").catch(()=>{})}};
+function show(h){const o=$("out");o.innerHTML=h;o.classList.remove("hide");o.scrollIntoView({behavior:"smooth"})}
+</script>
+</body>
+</html>
