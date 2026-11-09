@@ -111,6 +111,17 @@ const its=tc.items.filter(i=>i.str.trim()).map(i=>({s:i.str,x:i.transform[4],y:i
 let cur=[],ly=null;const flush=()=>{if(cur.length)out.push(cur.sort((a,b)=>a.x-b.x).map(i=>i.s).join(" ").replace(/\s+/g," ").trim());cur=[]};
 for(const i of its){if(ly!==null&&Math.abs(i.y-ly)>3)flush();if(!cur.length)ly=i.y;cur.push(i)}flush()}
 return out}
+async function pdfLines2(file){
+pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const pdf=await pdfjsLib.getDocument({data:await file.arrayBuffer()}).promise;const out=[];
+for(let p=1;p<=pdf.numPages;p++){const pg=await pdf.getPage(p);const vp=pg.getViewport({scale:1});
+const tc=await pg.getTextContent();
+const its=tc.items.filter(i=>i.str.trim()).map(i=>{const t=pdfjsLib.Util.transform(vp.transform,i.transform);
+const n=Math.hypot(t[0],t[1])||1,ux=t[0]/n,uy=t[1]/n;
+return{s:i.str,al:t[4]*ux+t[5]*uy,pe:-t[4]*uy+t[5]*ux}}).sort((a,b)=>a.pe-b.pe||a.al-b.al);
+let cur=[],lp=null;const flush=()=>{if(cur.length)out.push(cur.sort((a,b)=>a.al-b.al).map(i=>i.s).join(" ").replace(/\s+/g," ").trim());cur=[]};
+for(const i of its){if(lp!==null&&Math.abs(i.pe-lp)>4)flush();if(!cur.length)lp=i.pe;cur.push(i)}flush()}
+return out}
 function parseLines(lines,mode,dg){const ok=[],bad=[];const re=new RegExp("\\b\\d{"+dg+",}\\b");
 for(const l of lines){if(/total/i.test(l))continue;const am=l.match(RA);if(!am)continue;
 const m=num(am[am.length-1]);
@@ -122,7 +133,7 @@ return{ok,bad}}
 $("lp").onclick=async()=>{
 const dg=Math.max(1,parseInt($("dg").value)||6);const all=[];let h="";
 for(const n of[1,2]){const f=$("p"+n).files[0];if(!f)continue;
-try{const L=await pdfLines(f);const r=parseLines(L,$("t"+n).value,dg);
+try{const L=await pdfLines2(f);const r=parseLines(L,$("t"+n).value,dg);
 const s=r.ok.reduce((a,d)=>a+Math.round(d.m*100),0);
 h+=`<div class="msg ${r.ok.length?"ok":"wr"}">PDF ${n}: ${r.ok.length} documentos (${r.ok.filter(d=>d.t==="T").length} tarjeta, ${r.ok.filter(d=>d.t==="E").length} efectivo), suma ${money(s)} (${L.length} líneas leídas)</div>`;
 if(!L.length)h+=`<div class="msg wr">PDF ${n} no tiene texto seleccionable (parece escaneado). Necesito otra versión del archivo.</div>`;
